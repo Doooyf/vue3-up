@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        const vnode = {
+            tag: 'div',
+            props: {
+                onClick: () => {
+                    alert('Hello, World!');
+                }
+            },
+            children: 'click me'
+        }
+
+        function render(vnode, container) {
+            // 利用tag标签名，创建DOM元素
+            const el = document.createElement(vnode.tag);
+
+            // 遍历props，将属性添加到DOM元素上
+            for (const key in vnode.props) {
+                if (/^on/.test(key)) {
+                    // on 开头的属性，表示事件
+                    el.addEventListener(
+                        // 去掉on，转换为小写，作为事件名
+                        key.slice(2).toLowerCase(),
+                        // 事件处理函数
+                        vnode.props[key]
+                    );
+                }
+            }
+
+            if (typeof vnode.children === 'string') {
+                // 如果children是字符串，创建文本节点
+                el.appendChild(document.createTextNode(vnode.children));
+            } else if (Array.isArray(vnode.children)) {
+                // 如果children是数组，递归渲染每个子节点
+                vnode.children.forEach(child => render(child, el));
+            }
+
+            // 将DOM元素添加到容器中
+            container.appendChild(el);
+        }
+
+        render(vnode, document.getElementById('app'));
+    </script>
+</body>
+</html>
