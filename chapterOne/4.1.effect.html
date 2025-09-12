@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        function effect() {
+            document.getElementById('app').innerText = obj.text;
+        }
+
+        // 存储副作用函数的桶
+        const bucket = new Set();
+        
+        const data = { text: 'hello world' };
+
+        const obj = new Proxy(data, {
+            get(target, key) {
+                // 将副作用函数添加到桶中
+                bucket.add(effect);
+                // 返回目标对象的属性值
+                return target[key];
+            },
+            set(target, key, newValue) {
+                // 更新目标对象的属性值
+                target[key] = newValue;
+                // 执行桶中的所有副作用函数
+                bucket.forEach(fn => fn());
+                // 返回 true 表示设置成功
+                return true;
+            }
+        });
+
+        effect();
+
+        setTimeout(() => {
+            console.log('1000ms later', obj);
+            obj.text = 'hello vue';
+        }, 1000);
+    </script>
+</body>
+</html>

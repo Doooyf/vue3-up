@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // 用一个变量存储被注册的「副作用函数」
+        let activeEffect;
+
+        // 用于注册「副作用函数」的函数
+        function effect(fn) {
+            activeEffect = fn;
+            fn();
+        }
+
+        // 存储「副作用函数」的桶
+        // const bucket = new Set();
+        const bucket = new WeakMap();
+        
+        const data = { text: 'hello world' };
+
+        /**
+         *  target1
+                └── text1
+                    └── effectFn1
+            target2（= WeakMap，也就是原始对象）
+                └── text2 （= Map，也就是key）
+                    └── effectFn2 （= Set，也就是副作用函数）
+            ==================================================
+            例：
+            effect(function effectFn() {
+              document.body.innerText = obj.text
+            })
+
+            原始对象：WeakMap => target
+            key：Map => key
+            副作用函数：Set => effectFn
+
+            简单理解：
+            const target = {
+                text: function effectFn() {}
+            }
+         **/
+        const obj = new Proxy(data, {
+            get(target, key) {
+                // 4.3 上
+                // // 将activeEffect中存储的副作用函数添加到桶中
+                // if (activeEffect) {
+                //     bucket.add(activeEffect);
+                // }
+                // // 返回目标对象的属性值
+                // return target[key];
+
+                // 4.3 下
+                // 返回activeEffect中已存储的副作用函数
+                if (!activeEffect) return target[key];
+
+                // ================================================== 将Map添加到WeakMap中：obj.text
+                // 根据target从桶中取得「副作用函数」的集合
+                let depsMap = bucket.get(target);
+                // 如果不存在集合，则创建一个新的集合，并关联target将其添加到桶中
+                if (!depsMap) {
+                    bucket.set(target, (depsMap = new Map()));
+                }
+
+                // ================================================== 将Set添加到Map中：text => effectFn
+                // 根据key从集合中取得副作用函数的数组
+                let deps = depsMap.get(key);
+                // 如果不存在数组，则创建一个新的数组，并关联key将其添加到集合中
+                if (!deps) {
+                    depsMap.set(key, (deps = new Set()));
+                }
+
+                // ================================================== 将函数添加到Set中
+                // 将activeEffect中存储的副作用函数添加到数组中
+                deps.add(activeEffect);
+                return target[key];
+            },
+            set(target, key, newValue) {
+                // 4.3 上
+                // // 更新目标对象的属性值
+                // target[key] = newValue;
+                // // 执行桶中的所有副作用函数
+                // bucket.forEach(fn => fn());
+                // // 返回 true 表示设置成功
+                // return true;
+
+                // 4.3 下
+                target[key] = newValue;
+
+                // 根据target从桶中取得「副作用函数」的集合
+                const depsMap = bucket.get(target);
+                if (!depsMap) return;
+
+                // 根据key从集合中取得副作用函数的数组
+                const effects = depsMap.get(key);
+                effects && effects.forEach(fn => fn());
+            }
+        });
+
+        effect(() => {
+            console.log('effect run');
+            document.getElementById('app').innerText = obj.text;
+        });
+
+        setTimeout(() => {
+            console.log('1000ms later', obj);
+            obj.vv = 'hello vue';
+        }, 1000);
+    </script>
+</body>
+</html>
