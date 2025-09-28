@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <script>
+    // 定义一个构造函数
+    function SuperType(name) {
+      this.name = name;
+      this.color = ['red', 'blue', 'green'];
+    }
+
+    // 为构造函数添加一个方法
+    SuperType.prototype.sayName = function () {
+      alert(this.name);
+    }
+
+    function SubType(name, age) {
+      SuperType.call(this, name); // 继承属性
+
+      this.age = age;
+    }
+
+    // 继承方法
+    SubType.prototype = new SuperType();
+    SubType.prototype.constructor = SubType;
+    SubType.prototype.sayAge = function () {
+      alert(this.age);
+    }
+
+    var instance = new SubType('Nicholas', 29);
+    console.log(instance);
+  </script>
+
+  <script>
+    function SuperType2() {
+      this.name = name;
+      this.color = ['red', 'blue', 'green'];
+    }
+
+    // 为构造函数添加一个方法
+    SuperType2.prototype.sayName = function () {
+      alert(this.name);
+    }
+
+    function SubType2(name, age) {
+      SuperType2.call(this, name); // 继承属性
+
+      this.age = age;
+    }
+
+    SubType2.prototype = new SuperType2();
+    SubType2.prototype.constructor = SubType2;
+    SubType2.prototype.sayAge = function () {
+      alert(this.age);
+    }
+  </script>
+</body>
+</html>

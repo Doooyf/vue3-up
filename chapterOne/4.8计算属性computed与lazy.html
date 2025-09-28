@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <div id="app"></div>
+
+    <script>
+      // 清除副作用函数
+      function cleanup(effectFn) {
+        // 遍历 effectFn.deps 数组
+        for (let i = 0; i < effectFn.deps.length; i++) {
+          // deps 是依赖集合
+          const deps = effectFn.deps[i];
+          // 将 effectFn 从依赖集合中移除
+          deps.delete(effectFn);
+        }
+        // 最后需要重置 effectFn.deps 数组
+        effectFn.deps.length = 0;
+      }
+
+      // 用一个变量存储被注册的「副作用函数」
+      let activeEffect;
+      // effect 栈
+      const effectStack = [];
+
+      // 用于注册「副作用函数」的函数
+      function effect(fn, options = {}) {
+        const effectFn = () => {
+          cleanup(effectFn);
+          // 当effectFn执行时，将activeEffect设置为effectFn
+          activeEffect = effectFn;
+          // 在调用副作用函数之前将当前副作用函数压入栈中
+          effectStack.push(effectFn);
+          // 将fn的执行结果存储到res中
+          const res = fn();
+          // fn();
+
+          // 在当前副作用函数执行完毕后，将当前副作用函数弹出栈，并把activeEffect还原为之前的值
+          effectStack.pop();
+
+          // activeEffect指向effectStack数组中最后一个元素
+          activeEffect = effectStack[effectStack.length - 1];
+
+          return res;
+        };
+
+        // 将 options 和 deps 添加到 effectFn 上
+        effectFn.options = options;
+        effectFn.deps = [];
+
+        // 只有非lazy的时候才执行
+        if (!options.lazy) {
+          effectFn();
+        }
+
+        // 将副作用函数作为返回值返回
+        return effectFn;
+      }
+
+      // 存储「副作用函数」的桶
+      // const bucket = new Set();
+      const bucket = new WeakMap();
+
+      const data = {
+        text: "hello world",
+        foo: 1,
+        bar: 2
+      };
+
+      function track(target, key) {
+        if (!activeEffect) return;
+
+        // ================================================== 将Map添加到WeakMap中：obj.text
+        // 根据target从桶中取得「副作用函数」的集合
+        let depsMap = bucket.get(target);
+        // 如果不存在集合，则创建一个新的集合，并关联target将其添加到桶中
+        if (!depsMap) {
+          bucket.set(target, (depsMap = new Map()));
+        }
+
+        // ================================================== 将Set添加到Map中：text => effectFn
+        // 根据key从集合中取得副作用函数的数组
+        let deps = depsMap.get(key);
+        // 如果不存在数组，则创建一个新的数组，并关联key将其添加到集合中
+        if (!deps) {
+          depsMap.set(key, (deps = new Set()));
+        }
+
+        // ================================================== 将函数添加到Set中
+        // 将activeEffect中存储的副作用函数添加到数组中
+        deps.add(activeEffect);
+
+        // deps 就是一个当前副作用函数在关联的依赖合集
+        activeEffect.deps.push(deps);
+      }
+
+      function trigger(target, key) {
+        // 根据target从桶中取得「副作用函数」的集合
+          const depsMap = bucket.get(target);
+          if (!depsMap) return;
+
+          // 根据key从集合中取得副作用函数的数组
+          const effects = depsMap.get(key);
+
+          const effectsToRun = new Set();
+          effects && effects.forEach(effectFn => {
+            // 如果当前执行的副作用函数与正在执行的副作用函数相同，则不触发
+            if (effectFn !== activeEffect) {
+              effectsToRun.add(effectFn);
+            }
+          });
+
+          // const effectsToRun = new Set(effects);
+          effectsToRun.forEach(effectFn => {
+            if (effectFn.options.scheduler) {
+              effectFn.options.scheduler(effectFn);
+            } else {
+              effectFn()
+            }
+          });
+
+          // effects && effects.forEach((fn) => fn());
+      }
+
+      const obj = new Proxy(data, {
+        get(target, key) {
+          track(target, key);
+          return target[key];
+        },
+        set(target, key, newValue) {
+          target[key] = newValue;
+          trigger(target, key);
+        },
+      });
+
+      // 执行函数
+      // const effectFn = effect(
+      //   () => obj.foo + obj.bar,
+      //   {lazy: true}
+      // );
+
+      // console.log(effectFn()); // 3
+      // setTimeout(() => {
+      //   obj.text = "hello vue";
+      //   console.log("1000ms later", obj);
+      // }, 1000);
+
+      function computed(getter) {
+        // value 用来缓存上一次计算的值
+        let value;
+        let dirty = true; // dirty变量用来判断是否需要重新计算值
+
+        // 把getter作为副作用函数，创建一个lazy的effect
+        const effectFn = effect(getter, {
+          lazy: true,
+          scheduler() {
+            if (!dirty) {
+              dirty = true;
+              // 当计算属性依赖的响应数据变化时，手动调用trigger函数触发响应
+              trigger(obj, 'value');
+            } 
+          }
+        });
+
+        const obj = {
+          get value() {
+            if (dirty) {
+              value = effectFn();
+              dirty = false;
+            }
+            // 当读取value时，手动调用track函数进行追踪
+            track(obj, 'value');
+            return value;
+          }
+        };
+
+        return obj;
+      }
+
+      const sum = computed(() => obj.foo + obj.bar);
+
+      console.log(sum.value); // 3
+      obj.foo++;
+      console.log(sum.value); // 4
+
+    </script>
+</body>
+</html>
